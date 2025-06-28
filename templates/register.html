@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Tafeltennis club De Pinte</title>
+    <link rel="stylesheet" href="header.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='register.css') }}">
+</head>
+<body>
+    <div class="header-container">
+        <div class="header-main">
+            <div class="auth-buttons">
+                <a href="#" class="auth-button login">Log In</a>
+                <a href="#" class="auth-button register">Register</a>
+            </div>
+            <a href="/" class="site-title">Tafeltennis club De Pinte</a>
+        </div>
+        <nav>
+            <div class="nav-links">
+              <a href="{{ url_for('home') }}">Home</a>
+              <a href="{{ url_for('info') }}">Info</a>
+              <a href="{{ url_for('home') }}#competition">Competition</a>
+              <a href="{{ url_for('activities') }}">News</a>
+              <a href="{{ url_for('home') }}#contact">Contact</a>
+              <a href="{{ url_for('training') }}">Training</a>
+            </div>
+        </nav>
+    </div>
+    <div class="register-container">
+        <h2>Create Account</h2>
+            <form>
+                <div class="form-group">
+                    <input type="text" name="firstName" placeholder="First Name">
+                </div>
+                <div class="form-group">
+                    <input type="text" name="lastName" placeholder="Last Name">
+                </div>
+                <div class="form-group">
+                    <input type="email" name="email" placeholder="Email">
+                </div>
+                <div class="form-group">
+                    <input type="password" name="password" placeholder="Password">
+                </div>
+                <div class="form-group">
+                    <input type="password" name="confirmPassword" placeholder="Confirm Password">
+                </div>
+                <div class="form-group">
+                    <input type="date" name="dateOfBirth">
+                </div>
+                <div class="form-group">
+                    <input type="tel" name="phoneNumber" placeholder="Phone Number">
+                </div>
+                <button type="submit">Register</button>
+            </form>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Handle login navigation
+            document.querySelectorAll('.auth-button.login').forEach(button => {
+                button.addEventListener('click', () => {
+                    window.location.href = '/login';
+                });
+            });
+
+            // Handle register navigation
+            document.querySelectorAll('.auth-button.register').forEach(button => {
+                button.addEventListener('click', () => {
+                    window.location.href = '/register';
+                });
+            });
+
+            // Add navigation listeners for all sections
+            setupSectionNavigation();
+
+            // Handle registration form if we're on the register page
+            if (window.location.pathname.includes('register.html')) {
+                handleRegistrationForm();
+            }
+        });
+
+        // Function to set up section navigation
+        function setupSectionNavigation() {
+            const navLinks = [
+                { selector: '.nav-links a[href="#home"]', section: '' },
+                { selector: '.nav-links a[href="#contact"]', section: 'contact' },
+                { selector: '.nav-links a[href="#info"]', section: 'info' },
+                { selector: '.nav-links a[href="#training"]', section: 'training' },
+                { selector: '.nav-links a[href="#competition"]', section: 'competition' },
+                { selector: '.nav-links a[href="#news"]', section: 'news' },
+            ];
+
+            navLinks.forEach(({ selector, section }) => {
+                const button = document.querySelector(selector);
+                if (button) {
+                    button.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        handleNavigation(section);
+                    });
+                }
+            });
+        }
+
+        // Function to handle navigation
+        function handleNavigation(sectionId) {
+            if (window.location.pathname === '/' || window.location.pathname.endsWith('home.html')) {
+                // Scroll smoothly to the section if on the home page
+                const section = document.getElementById(sectionId);
+                if (section) {
+                    const headerHeight = document.querySelector('.header-container')?.offsetHeight || 0;
+                    const targetTop = section.getBoundingClientRect().top + window.pageYOffset - headerHeight;
+                    window.scrollTo({ top: targetTop, behavior: 'smooth' });
+                }
+            } else {
+                // Redirect to the home page with the section hash
+                window.location.href = `/#${sectionId}`;
+            }
+        }
+
+        // Function to handle registration form
+        function handleRegistrationForm() {
+            const registerButton = document.querySelector('.register-container button');
+            const registerForm = document.querySelector('.register-container form');
+
+            if (registerButton) {
+                registerButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+
+                    // Get all form inputs
+                    const firstName = document.querySelector('input[name="firstName"]').value;
+                    const lastName = document.querySelector('input[name="lastName"]').value;
+                    const email = document.querySelector('input[name="email"]').value;
+                    const password = document.querySelector('input[name="password"]').value;
+                    const confirmPassword = document.querySelector('input[name="confirmPassword"]').value;
+                    const dateOfBirth = document.querySelector('input[name="dateOfBirth"]').value;
+                    const phoneNumber = document.querySelector('input[name="phoneNumber"]').value;
+
+                    // Basic form validation
+                    if (!firstName || !lastName || !email || !password || !confirmPassword || !dateOfBirth || !phoneNumber) {
+                        alert('Please fill in all fields');
+                        return;
+                    }
+
+                    if (password !== confirmPassword) {
+                        alert('Passwords do not match');
+                        return;
+                    }
+
+                    if (!isValidEmail(email)) {
+                        alert('Please enter a valid email address');
+                        return;
+                    }
+
+                    // If validation passes, you would typically send this data to your server
+                    console.log('Registration submitted:', {
+                        firstName,
+                        lastName,
+                        email,
+                        dateOfBirth,
+                        phoneNumber
+                    });
+
+                    // Redirect to login page after successful registration
+                    alert('Registration successful! Please log in.');
+                    window.location.href = '/login';
+                });
+            }
+        }
+
+        // Helper function to validate email
+        function isValidEmail(email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return emailRegex.test(email);
+        }
+
+    </script>
+</body>
+</html>

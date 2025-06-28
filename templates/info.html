@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Font Style Preview with Auto-Save</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='header.css') }}">
+  <style>
+    /* Basic Reset and Styling */
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background-color: #f5f6fa;
+      font-family: Arial, sans-serif;
+    }
+
+    /* Editor Toolbar Styles */
+    .editor-toolbar {
+        align-items: center;
+        position: fixed;
+        top: 200px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        z-index: 1001;
+        background: white;
+        padding: 8px 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        width: 100%;
+    }
+    .container {
+      position: relative;
+      display: flex;
+      height: 32px;
+      border: 1px solid #8f8e8f;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: white;
+    }
+    .container.font-container { width: 140px; }
+    .container.size-container { width: 100px; }
+    .container.alignment-container, .container.color-container { width: 120px; }
+    .container.toggle-container {
+      width: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: white;
+      border-radius: 4px;
+    }
+    .container.font-container .left { flex-basis: 77.14%; border-right: 1px solid #8f8e8f; padding: 8px; }
+    .container.size-container .left { flex-basis: 68%; border-right: 1px solid #8f8e8f; padding: 8px; }
+    .container.alignment-container .left, .container.color-container .left { flex-basis: 70%; border-right: 1px solid #8f8e8f; padding: 8px; }
+    .left input {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+      color: #2d3436;
+      font-size: 11px;
+      outline: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .editor-container .left {
+        flex-basis: 70%;
+        border-right: 1px solid #8f8e8f;
+        padding: 8px;
+    }
+
+    .right {
+      flex-grow: 1;
+      height: 100%;
+      position: relative;
+    }
+    .triangle {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 9px solid #000;
+      position: absolute;
+      right: 9px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    /* Dropdown lists */
+    .font-list, .size-font-list, .align-list {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      max-height: 160px;
+      overflow-y: auto;
+      background-color: white;
+      border: 1px solid #8f8e8f;
+      z-index: 10;
+      width: 100%;
+    }
+    .color-list {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      max-height: 180px;
+      overflow-y: auto;
+      background-color: white;
+      border: 1px solid #8f8e8f;
+      z-index: 10;
+      width: 100%;
+      padding: 4px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 3px;
+      border-radius: 4px;
+    }
+    .font-item, .size-font-item, .align-item, .color-item {
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .font-item:hover, .size-font-item:hover, .align-item:hover, .color-item:hover {
+      background-color: #f0f0f0;
+    }
+    .color-item {
+      height: 18px;
+      width: 18px;
+      border-radius: 2px;
+      border: 1px solid #000;
+      transition: transform 0.1s ease, outline 0.1s ease;
+    }
+
+    .color-item:hover {
+      transform: scale(1.15);
+      outline: 2px solid white; /* acts like a white halo */
+      z-index: 1;
+    }
+
+    /* Preview text area */
+    .preview-area {
+      width: 80%;
+      min-height: 70vh;
+      height: auto;
+      margin: 100px auto 60px;
+      padding: 20px;
+      border: 2px solid #8f8e8f;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 16px;
+      line-height: 1.5;
+      overflow-wrap: break-word;
+      overflow-y: hidden;
+    }
+    .preview-area:focus {
+      outline: none;
+      border-color: #6c5ce7;
+      box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
+    }
+    .preview-area[placeholder]:empty:before {
+      content: attr(placeholder);
+      color: #999;
+      pointer-events: none;
+    }
+    #color-display {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      border-radius: 4px;
+    }
+
+    /* Link styles */
+    .preview-area a {
+      color: #0000EE;
+      text-decoration: underline;
+      background-color: transparent;
+      font-weight: normal;
+      font-style: normal;
+      font-size: inherit;
+      font-family: inherit;
+    }
+    .preview-area a:visited { color: #551A8B; }
+    .preview-area a:hover { color: #FF0000; }
+    .preview-area a:active { color: #FF0000; }
+
+    /* Image styles */
+    .preview-area img {
+      max-width: var(--image-max-size, 300px);
+      max-height: var(--image-max-size, 300px);
+      width: auto;
+      height: auto;
+    }
+
+    /* File picker styles */
+    .custom-file-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .custom-file-input { display: none; }
+    .file-label-container {
+      display: flex;
+      align-items: center;
+      height: 36px;
+      padding: 0 10px;
+    }
+    .file-name-display {
+      font-size: 14px;
+      font-family: sans-serif;
+      user-select: none;
+    }
+    .upload-button {
+      background-color: white;
+      color: black;
+      border: 1px solid #ffffff;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: sans-serif;
+      font-size: 14px;
+      box-shadow: none;
+      outline: none;
+    }
+    .upload-button:hover { background-color: #f0f0f0; }
+
+    /* Context menu */
+    .context-menu {
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+      z-index: 10000;
+      min-width: 150px;
+      display: none;
+    }
+    .context-menu-item {
+      padding: 8px 15px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .context-menu-item:hover { background: #f0f0f0; }
+    .selected-image { outline: 2px solid #6c5ce7; }
+
+    #previewText {
+      font-size: 16px;
+      font-family: sans-serif;
+    }
+
+    #style-input {
+      font-size: 14px;
+      font-family: sans-serif;
+      color: black;
+    }
+
+    #size-input {
+      font-size: 14px;
+      font-family: sans-serif;
+      color: black;
+    }
+
+    #previewText {
+      font-size: 16px;
+      font-family: sans-serif;
+    }
+
+    input#style-input::placeholder {
+      color: black !important;
+      font-size: 14px !important;
+      font-family: sans-serif !important;
+      opacity: 1 !important;
+    }
+
+    input#size-input::placeholder {
+      color: black !important;
+      font-size: 14px !important;
+      font-family: sans-serif !important;
+      opacity: 1 !important;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="header-container">
+    <div class="header-main">
+      <div class="auth-buttons">
+        <a href="#" class="auth-button login">Log In</a>
+        <a href="#" class="auth-button register">Register</a>
+      </div>
+      <a href="/" class="site-title">Tafeltennis club De Pinte</a>
+    </div>
+    <nav>
+      <div class="nav-links">
+        <a href="{{ url_for('home') }}">Home</a>
+        <a href="{{ url_for('info') }}">Info</a>
+        <a href="{{ url_for('home') }}#competition">Competition</a>
+        <a href="{{ url_for('activities') }}">News</a>
+        <a href="{{ url_for('home') }}#contact">Contact</a>
+        <a href="{{ url_for('training') }}">Training</a>
+      </div>
+    </nav>
+  </div>
+  <!-- Editor Toolbar -->
+  <div class="editor-toolbar">
+    <!-- Font Style Container -->
+    <div class="container font-container">
+      <div class="left">
+        <input type="text" class="text-area" id="style-input" placeholder="sans-serif" readonly />
+      </div>
+      <div class="right" onclick="toggleFontList()">
+        <div class="triangle"></div>
+      </div>
+      <div class="font-list" id="fontList"></div>
+    </div>
+    <!-- Size Container -->
+    <div class="container size-container">
+      <div class="left">
+        <input type="text" class="text-area" id="size-input" placeholder="16" readonly />
+      </div>
+      <div class="right" onclick="toggleSizeList()">
+        <div class="triangle"></div>
+      </div>
+      <div class="size-font-list" id="sizeList"></div>
+    </div>
+    <!-- Alignment Container -->
+    <div class="container alignment-container">
+      <div class="left">
+        <span id="align-display" style="font-size: 11px;">Left</span>
+      </div>
+      <div class="right" onclick="toggleAlignList()">
+        <div class="triangle"></div>
+      </div>
+      <div class="align-list" id="alignList"></div>
+    </div>
+    <!-- Color Container -->
+    <div class="container color-container">
+      <div class="left">
+        <div id="color-display"></div>
+      </div>
+      <div class="right" onclick="toggleColorList()">
+        <div class="triangle"></div>
+      </div>
+      <div class="color-list" id="colorList"></div>
+    </div>
+    <!-- Bold Toggle Control -->
+    <div class="container toggle-container" id="bold-btn" onclick="toggleBold()">
+      <div class="left">
+        <span style="font-weight: bold; font-size: 14px;">B</span>
+      </div>
+    </div>
+    <!-- Underline Toggle Control -->
+    <div class="container toggle-container" id="underline-btn" onclick="toggleUnderline()">
+      <div class="left">
+        <span style="text-decoration: underline; font-size: 14px;">U</span>
+      </div>
+    </div>
+    <!-- Link Button -->
+    <div class="container toggle-container" id="link-btn" onclick="createLink()">
+      <div class="left">
+        <span style="font-size: 14px;">🔗</span>
+      </div>
+    </div>
+    <!-- First File Picker -->
+    <div class="custom-file-wrapper">
+      <div class="container file-label-container">
+        <label for="imageInput1" id="fileNameDisplay1" class="file-name-display">No file chosen</label>
+        <input type="file" name="image" accept=".png, .jpg, .jpeg" class="custom-file-input" id="imageInput1">
+      </div>
+      <div class="container">
+        <button type="button" id="uploadImageButton" class="upload-button">Upload</button>
+      </div>
+    </div>
+    <!-- Image Size Toggle -->
+    <div class="container">
+      <button id="toggleImageSize" class="upload-button">Medium</button>
+    </div>
+  </div>
+
+  <!-- Preview Text Area (Contenteditable) -->
+  <div class="preview-area" id="previewText" contenteditable="true">
+    {{ content|safe }}
+  </div>
+
+  <!-- Context Menu -->
+  <div id="context-menu" class="context-menu">
+    <div class="context-menu-item" id="replace-image">Replace Image</div>
+  </div>
+
+  <script>
+    // ========== EDITOR FUNCTIONALITY ==========
+    /* --- Auto-Save to File Functionality --- */
+    function autoSaveToFile() {
+      const content = document.getElementById("previewText").innerHTML;
+      fetch("/save_editor", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'content=' + encodeURIComponent(content)
+      })
+      .then(response => response.text())
+      .then(result => { console.log("Auto-saved:", result); })
+      .catch(error => console.error('Error:', error));
+    }
+    document.getElementById("previewText").addEventListener("input", autoSaveToFile);
+
+    /* --- Image Upload Functionality --- */
+    document.getElementById("uploadImageButton").addEventListener("click", function(){
+      const formData = new FormData();
+      const fileInput = document.getElementById("imageInput1");
+
+      if (fileInput.files.length === 0) {
+        alert("Please select an image file first");
+        return;
+      }
+
+      formData.append("image", fileInput.files[0]);
+
+      fetch("/upload", {
+        method: "POST",
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if(data.url) {
+          // Get the current selection in the contenteditable area
+          const preview = document.getElementById("previewText");
+          preview.focus();
+          const selection = window.getSelection();
+
+          if (selection.rangeCount > 0) {
+            let range = selection.getRangeAt(0);
+            range.collapse(false);
+            const img = document.createElement("img");
+            img.src = data.url;
+            img.alt = "Uploaded Image";
+            range.insertNode(img);
+            range.setStartAfter(img);
+            range.setEndAfter(img);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } else {
+            preview.appendChild(document.createElement("br"));
+            const img = document.createElement("img");
+            img.src = data.url;
+            img.alt = "Uploaded Image";
+            preview.appendChild(img);
+          }
+          autoSaveToFile();
+        } else {
+          alert("Upload failed: " + (data.error || "Unknown error"));
+        }
+      })
+      .catch(error => console.error("Error uploading image:", error));
+    });
+
+    /* --- Selection Save/Restore --- */
+    let savedRange = null;
+    function saveSelection() {
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) { savedRange = sel.getRangeAt(0); }
+    }
+    function restoreSelection() {
+      if (savedRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedRange);
+      }
+    }
+    document.querySelectorAll('.container .right').forEach(elem => {
+      elem.addEventListener("mousedown", function(event) {
+        event.preventDefault();
+        saveSelection();
+      });
+    });
+
+    /* --- Styling Functions --- */
+    function wrapSelectionWithSpan(styleObj) {
+      restoreSelection();
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      const span = document.createElement("span");
+      for (let prop in styleObj) { span.style[prop] = styleObj[prop]; }
+      if (range.collapsed) {
+        span.appendChild(document.createTextNode("\u200B"));
+        range.insertNode(span);
+        range.setStart(span, span.childNodes[0].length);
+        range.setEnd(span, span.childNodes[0].length);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else {
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        selection.removeAllRanges();
+      }
+    }
+    function applyFontToSelection(font) { wrapSelectionWithSpan({ fontFamily: font }); }
+    function applyFontSizeToSelection(size) { wrapSelectionWithSpan({ fontSize: size + "px" }); }
+    function applyColorToSelection(color) { wrapSelectionWithSpan({ color: color }); }
+
+    // STYLE input: on Enter, wrap the selected text in <span style="font-family:…">
+    document.getElementById('style-input')
+      .addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const font = e.target.value.trim();
+          if (font) {
+            applyFontToSelection(font);
+            autoSaveToFile();
+          }
+        }
+      });
+
+    // SIZE input: on Enter, wrap the selected text in <span style="font-size:…px">
+    document.getElementById('size-input')
+      .addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const size = parseInt(e.target.value, 10);
+          if (!isNaN(size)) {
+            applyFontSizeToSelection(size);
+            autoSaveToFile();
+          }
+        }
+      });
+
+
+    /* --- Data Arrays --- */
+    const fonts = ["serif", "sans-serif", "monospace", "system-ui",  "Arial", "Verdana",
+                   "Helvetica", "Tahoma", "Trebuchet MS", "Times New Roman", "Georgia", "Garamond", "Courier New",
+                   "Lucida Console", "Palatino Linotype", "Segoe UI", "Impact", "Comic Sans MS", "Lucida Sans Unicode"];
+    const sizes = [8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,48,72];
+    const alignments = ["Left", "Center", "Right"];
+    const colors = ["#000000", "#ffffff", "#ff0000", "#ff2400", "#ff4800", "#ff6d00", "#ff9100", "#ffb600",
+                    "#ffda00", "#f6ff00", "#d2ff00", "#adff00", "#89ff00", "#65ff00", "#00ff11", "#00ff35",
+                    "#00ff5a", "#00ff7e", "#00ffa2", "#00ffc7", "#00ffeb", "#00faff", "#00d5ff", "#00b1ff",
+                    "#008cff", "#0068ff", "#0044ff", "#0020ff", "#0b00ff", "#2f00ff", "#5300ff", "#7700ff",
+                    "#9c00ff", "#c000ff", "#e400ff", "#ff00f5", "#ff00d0", "#ff00ac", "#ff0088", "#ff0063"];
+
+
+    /* --- Populate Dropdown Lists --- */
+    const fontList = document.getElementById("fontList");
+    fonts.forEach(font => {
+      const fontItem = document.createElement("div");
+      fontItem.className = "font-item";
+      fontItem.textContent = font;
+      fontItem.style.fontFamily = font;
+      fontItem.addEventListener("mousedown", (e) => { e.preventDefault(); saveSelection(); });
+      fontItem.addEventListener("click", () => {
+        restoreSelection();
+        applyFontToSelection(font);
+        document.getElementById("style-input").value = font;
+        fontList.style.display = "none";
+        autoSaveToFile();
+      });
+      fontList.appendChild(fontItem);
+    });
+
+    const sizeList = document.getElementById("sizeList");
+    sizes.forEach(size => {
+      const sizeItem = document.createElement("div");
+      sizeItem.className = "size-font-item";
+      sizeItem.textContent = size + "px";
+      sizeItem.addEventListener("mousedown", (e) => { e.preventDefault(); saveSelection(); });
+      sizeItem.addEventListener("click", () => {
+        restoreSelection();
+        applyFontSizeToSelection(size);
+        document.getElementById("size-input").value = size;
+        sizeList.style.display = "none";
+        autoSaveToFile();
+      });
+      sizeList.appendChild(sizeItem);
+    });
+
+    const alignList = document.getElementById("alignList");
+    alignments.forEach(alignment => {
+      const alignItem = document.createElement("div");
+      alignItem.className = "align-item";
+      alignItem.textContent = alignment;
+      alignItem.addEventListener("mousedown", (e) => { e.preventDefault(); saveSelection(); });
+      alignItem.addEventListener("click", () => {
+        restoreSelection();
+        if (alignment === "Left") document.execCommand('justifyLeft');
+        else if (alignment === "Center") document.execCommand('justifyCenter');
+        else if (alignment === "Right") document.execCommand('justifyRight');
+        document.getElementById("align-display").textContent = alignment;
+        alignList.style.display = "none";
+      });
+      alignList.appendChild(alignItem);
+    });
+
+    const colorList = document.getElementById("colorList");
+    colors.forEach(color => {
+      const colorItem = document.createElement("div");
+      colorItem.className = "color-item";
+      colorItem.style.background = color;
+      colorItem.addEventListener("mousedown", (e) => { e.preventDefault(); saveSelection(); });
+      colorItem.addEventListener("click", () => {
+        restoreSelection();
+        applyColorToSelection(color);
+        document.getElementById("color-display").style.background = color;
+        colorList.style.display = "none";
+        autoSaveToFile();
+      });
+      colorList.appendChild(colorItem);
+    });
+
+    function toggleFontList() {
+      fontList.style.display = fontList.style.display === "block" ? "none" : "block";
+      sizeList.style.display = "none";
+      alignList.style.display = "none";
+      colorList.style.display = "none";
+    }
+    function toggleSizeList() {
+      sizeList.style.display = sizeList.style.display === "block" ? "none" : "block";
+      fontList.style.display = "none";
+      alignList.style.display = "none";
+      colorList.style.display = "none";
+    }
+    function toggleAlignList() {
+      alignList.style.display = alignList.style.display === "block" ? "none" : "block";
+      fontList.style.display = "none";
+      sizeList.style.display = "none";
+      colorList.style.display = "none";
+    }
+    function toggleColorList() {
+      colorList.style.display = colorList.style.display === "grid" ? "none" : "grid";
+      fontList.style.display = "none";
+      sizeList.style.display = "none";
+      alignList.style.display = "none";
+    }
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".container")) {
+        fontList.style.display = "none";
+        sizeList.style.display = "none";
+        alignList.style.display = "none";
+        colorList.style.display = "none";
+      }
+    });
+
+    function validateStyleInput(event) {
+      const input = event.target;
+      input.value = input.value.replace(/[^a-zA-Z\s]/g, '');
+    }
+    function validateSizeInput(event) {
+      const input = event.target;
+      input.value = input.value.replace(/[^0-9]/g, '');
+    }
+
+    document.getElementById("bold-btn").addEventListener("mousedown", (e) => { e.preventDefault(); saveSelection(); });
+    document.getElementById("underline-btn").addEventListener("mousedown", (e) => { e.preventDefault(); saveSelection(); });
+    document.getElementById("link-btn").addEventListener("mousedown", (e) => {  // ADDED THIS LINE
+      e.preventDefault();
+      saveSelection();
+    });
+
+    function toggleBold() {
+      restoreSelection();
+      document.execCommand('bold');
+      document.getElementById("bold-btn").classList.toggle("active");
+    }
+    function toggleUnderline() {
+      restoreSelection();
+      document.execCommand('underline');
+      document.getElementById("underline-btn").classList.toggle("active");
+    }
+
+    // ========== LINK CREATION ==========
+    function createLink() {
+      saveSelection();
+      restoreSelection();
+
+      let url = prompt("Enter URL:");
+      if (!url) return;
+
+      // Add protocol if missing and it's not a relative path
+      if (!url.includes("://") && !url.startsWith("/") && !url.startsWith("#")) {
+        url = "https://" + url;
+      }
+
+      const selection = window.getSelection();
+      if (selection.rangeCount === 0 || selection.toString().trim() === "") {
+        // Insert new link if no text is selected
+        const link = document.createElement('a');
+        link.href = url;
+        link.textContent = "New Link";
+        link.target = "_blank";
+
+        const range = selection.getRangeAt(0);
+        range.insertNode(link);
+
+        // Place cursor after the new link
+        range.setStartAfter(link);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else {
+        // Wrap selected text in link
+        document.execCommand('createLink', false, url);
+
+        // Add target="_blank" to all new links
+        document.querySelectorAll('#previewText a[href="' + url + '"]').forEach(link => {
+          link.target = "_blank";
+        });
+      }
+
+      autoSaveToFile();
+    }
+
+    // ========== IMAGE SIZE CONTROL ==========
+    const sizeModes = ["small", "medium", "big"];
+    let currentSizeIndex = 0;
+
+    const imageSizeButton = document.getElementById("toggleImageSize");
+
+    function updateImageSize(mode) {
+      switch (mode) {
+        case "small":
+          document.documentElement.style.setProperty("--image-max-size", "150px");
+          break;
+        case "medium":
+          document.documentElement.style.setProperty("--image-max-size", "300px");
+          break;
+        case "big":
+          document.documentElement.style.setProperty("--image-max-size", "600px");
+          break;
+      }
+
+      // Show the next size as the button label
+      const nextSize = sizeModes[(currentSizeIndex + 1) % sizeModes.length];
+      imageSizeButton.textContent = capitalizeFirstLetter(nextSize);
+    }
+
+    function capitalizeFirstLetter(text) {
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    }
+
+
+    function saveImageSize(mode) {
+      fetch("/image_size", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ size: mode }),
+      }).then(res => res.json()).then(data => {
+        if (data.status !== "success") {
+          console.error("Failed to save image size:", data.message);
+        }
+      });
+    }
+
+    // Modify the existing image size code to specify 'home' page
+    async function init() {
+      try {
+        const response = await fetch('/image_size');
+        const sizes = await response.json();
+
+        const savedSize = sizes?.home || 'medium';
+
+        currentSizeIndex = sizeModes.indexOf(savedSize);
+        if (currentSizeIndex === -1) currentSizeIndex = 1;
+
+        console.log("Loaded image size:", savedSize);  // Debug
+
+        updateImageSize(sizeModes[currentSizeIndex]);
+      } catch (e) {
+        console.error("Failed to fetch saved image size:", e);
+        currentSizeIndex = 1; // fallback to medium
+        updateImageSize("medium");
+      }
+    }
+
+
+    imageSizeButton.addEventListener("click", () => {
+      currentSizeIndex = (currentSizeIndex + 1) % sizeModes.length;
+      const newSize = sizeModes[currentSizeIndex];
+
+      updateImageSize(newSize);
+
+      fetch('/image_size', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page: 'home', size: newSize })
+      }).then(res => res.json()).then(data => {
+        if (data.status !== "success") {
+          console.error("Failed to save image size:", data.message);
+        }
+      });
+    });
+
+
+    // Run on page load
+    init();
+
+    // ========== CONTEXT MENU FOR IMAGES ==========
+    let selectedImage = null;
+    const contextMenu = document.getElementById("context-menu");
+
+    // Handle right-click on images
+    document.getElementById("previewText").addEventListener("contextmenu", (e) => {
+      if (e.target.tagName === "IMG") {
+        e.preventDefault();
+        selectedImage = e.target;
+        selectedImage.classList.add("selected-image");
+
+        // Position context menu
+        contextMenu.style.display = "block";
+        contextMenu.style.left = `${e.pageX}px`;
+        contextMenu.style.top = `${e.pageY}px`;
+      }
+    });
+
+    // Hide context menu
+    document.addEventListener("click", (e) => {
+      if (!contextMenu.contains(e.target)) {
+        contextMenu.style.display = "none";
+        if (selectedImage) {
+          selectedImage.classList.remove("selected-image");
+          selectedImage = null;
+        }
+      }
+    });
+
+    // Handle replace image option
+    document.getElementById("replace-image").addEventListener("click", () => {
+      if (selectedImage) {
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/*";
+        fileInput.onchange = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          const formData = new FormData();
+          formData.append("image", file);
+
+          fetch("/upload", {
+            method: "POST",
+            body: formData
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.url) {
+              selectedImage.src = data.url;
+              contextMenu.style.display = "none";
+              selectedImage.classList.remove("selected-image");
+              autoSaveToFile();
+            }
+          });
+        };
+        fileInput.click();
+      }
+    });
+
+    // ========== FILE INPUT LABEL UPDATE ==========
+    document.getElementById("imageInput1").addEventListener("change", (e) => {
+      document.getElementById("fileNameDisplay1").textContent =
+        e.target.files[0]?.name || "No file chosen";
+    });
+
+    // ========== INITIALIZE UI CONTROLS ==========
+    function updateUIControls() {
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+
+      const range = selection.getRangeAt(0);
+      const element = range.startContainer.parentElement;
+      const styles = window.getComputedStyle(element);
+
+      // Update Font Display
+      const fontFamily = styles.fontFamily.replace(/"/g, '');
+      document.getElementById('font-display').textContent = fontFamily.split(',')[0].trim();
+
+      // Update Size Display
+      const fontSize = parseInt(styles.fontSize);
+      document.getElementById('size-display').textContent = fontSize ? `${fontSize}px` : '';
+    }
+
+    // Initialize UI controls when content loads
+    document.addEventListener('DOMContentLoaded', () => {
+      const preview = document.getElementById('previewText');
+      if (preview.firstChild) {
+        const styles = window.getComputedStyle(preview.firstChild);
+        document.getElementById('font-display').textContent =
+          styles.fontFamily.split(',')[0].replace(/"/g, '');
+
+        const fontSize = parseInt(styles.fontSize);
+        document.getElementById('size-display').textContent = fontSize ? `${fontSize}px` : '';
+
+        document.getElementById('color-display').style.background = styles.color;
+      }
+
+      // Update UI controls when selection changes
+      preview.addEventListener('click', updateUIControls);
+      preview.addEventListener('keyup', updateUIControls);
+    });
+  </script>
+</body>
+</html>
